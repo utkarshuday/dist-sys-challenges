@@ -15,8 +15,7 @@ pub struct Message<T> {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Body<T> {
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "msg_id")]
-    pub id: Option<usize>,
+    pub msg_id: Option<usize>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub in_reply_to: Option<usize>,
@@ -36,6 +35,22 @@ pub enum InitPayload {
 }
 
 impl<P: Serialize> Message<P> {
+    pub fn into_response(self, next_msg_id: Option<&mut usize>, node_id: &str) -> Self {
+        Self {
+            src: node_id.to_string(),
+            dest: self.src,
+            body: Body {
+                msg_id: next_msg_id.map(|next_msg_id| {
+                    let temp = *next_msg_id;
+                    *next_msg_id += 1;
+                    temp
+                }),
+                in_reply_to: self.body.msg_id,
+                kind: self.body.kind,
+            },
+        }
+    }
+
     pub fn send_message(&self, output: &mut StdoutLock) -> anyhow::Result<()> {
         serde_json::to_writer(&mut *output, self).context("serialize response to echo failed")?;
         output.write_all(b"\n").context("write trailing newline")?;
@@ -68,8 +83,8 @@ pub fn send_init_message(
         src: init_message.dest,
         dest: init_message.src,
         body: Body {
-            id: Some(0),
-            in_reply_to: init_message.body.id,
+            msg_id: Some(0),
+            in_reply_to: init_message.body.msg_id,
             kind: InitPayload::InitOk,
         },
     };

@@ -14,26 +14,18 @@ pub enum Payload {
 }
 
 struct GenerateNode {
-    src: String,
-    id: usize,
+    node_id: String,
+    next_msg_id: usize,
 }
 
 impl Node<Payload> for GenerateNode {
     fn step(&mut self, input: Message<Payload>, output: &mut StdoutLock) -> anyhow::Result<()> {
-        match input.body.kind {
+        let mut response = input.into_response(Some(&mut self.next_msg_id), &self.node_id);
+        match response.body.kind {
             Payload::Generate => {
-                let guid = format!("{}-{}", self.src, self.id);
-                let response = Message {
-                    src: self.src.clone(),
-                    dest: input.src,
-                    body: Body {
-                        id: Some(self.id),
-                        in_reply_to: input.body.id,
-                        kind: Payload::GenerateOk { guid },
-                    },
-                };
+                let guid = format!("{}-{}", self.node_id, self.next_msg_id);
+                response.body.kind = Payload::GenerateOk { guid };
                 response.send_message(output)?;
-                self.id += 1;
             }
             Payload::GenerateOk { .. } => {}
         }
@@ -42,8 +34,11 @@ impl Node<Payload> for GenerateNode {
 }
 
 impl GenerateNode {
-    fn new(src: String, id: usize) -> Self {
-        Self { src, id }
+    fn new(node_id: String, next_msg_id: usize) -> Self {
+        Self {
+            node_id,
+            next_msg_id,
+        }
     }
 }
 

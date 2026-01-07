@@ -11,25 +11,17 @@ pub enum Payload {
 }
 
 struct EchoNode {
-    src: String,
-    id: usize,
+    node_id: String,
+    next_msg_id: usize,
 }
 
 impl Node<Payload> for EchoNode {
     fn step(&mut self, input: Message<Payload>, output: &mut StdoutLock) -> anyhow::Result<()> {
-        match input.body.kind {
+        let mut response = input.into_response(Some(&mut self.next_msg_id), &self.node_id);
+        match response.body.kind {
             Payload::Echo { echo } => {
-                let response = Message {
-                    src: self.src.clone(),
-                    dest: input.src,
-                    body: Body {
-                        id: Some(self.id),
-                        in_reply_to: input.body.id,
-                        kind: Payload::EchoOk { echo },
-                    },
-                };
+                response.body.kind = Payload::EchoOk { echo };
                 response.send_message(output)?;
-                self.id += 1;
             }
             Payload::EchoOk { .. } => {}
         }
@@ -38,8 +30,11 @@ impl Node<Payload> for EchoNode {
 }
 
 impl EchoNode {
-    fn new(src: String, id: usize) -> Self {
-        Self { src, id }
+    fn new(node_id: String, next_msg_id: usize) -> Self {
+        Self {
+            node_id,
+            next_msg_id,
+        }
     }
 }
 
