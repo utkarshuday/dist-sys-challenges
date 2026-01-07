@@ -34,9 +34,9 @@ impl Node<Payload> for GenerateNode {
 }
 
 impl GenerateNode {
-    fn new(node_id: String, next_msg_id: usize) -> Self {
+    fn new(init: Init, next_msg_id: usize) -> Self {
         Self {
-            node_id,
+            node_id: init.node_id,
             next_msg_id,
         }
     }
@@ -47,8 +47,8 @@ fn main() -> anyhow::Result<()> {
     let mut stdin = stdin.lines();
     let mut output = std::io::stdout().lock();
 
-    let node_id = send_init_message(&mut stdin, &mut output)?;
-    let mut node = GenerateNode::new(node_id, 1);
+    let init = send_init_message(&mut stdin, &mut output)?;
+    let mut node = GenerateNode::new(init, 1);
 
     main_loop(&mut node, &mut stdin, &mut output)
 }

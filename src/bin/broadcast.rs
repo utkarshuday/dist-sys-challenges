@@ -1,9 +1,8 @@
 use anyhow::Ok;
 use distributed_systems::*;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::{BufRead, StdoutLock},
 };
 
@@ -11,7 +10,7 @@ use std::{
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Payload {
     Broadcast {
-        message: Value,
+        message: usize,
     },
     BroadcastOk,
     Topology {
@@ -20,14 +19,14 @@ pub enum Payload {
     TopologyOk,
     Read,
     ReadOk {
-        messages: Vec<Value>,
+        messages: HashSet<usize>,
     },
 }
 
 struct BroadcastNode {
     node_id: String,
     next_msg_id: usize,
-    messages: Vec<Value>,
+    messages: HashSet<usize>,
     topology: HashMap<String, Vec<String>>,
 }
 
@@ -36,7 +35,7 @@ impl Node<Payload> for BroadcastNode {
         let mut response = input.into_response(Some(&mut self.next_msg_id), &self.node_id);
         match response.body.kind {
             Payload::Broadcast { message } => {
-                self.messages.push(message);
+                self.messages.insert(message);
                 response.body.kind = Payload::BroadcastOk;
                 response.send_message(output)?;
             }
@@ -58,11 +57,11 @@ impl Node<Payload> for BroadcastNode {
 }
 
 impl BroadcastNode {
-    fn new(node_id: String, next_msg_id: usize) -> Self {
+    fn new(init: Init, next_msg_id: usize) -> Self {
         Self {
-            node_id,
+            node_id: init.node_id,
             next_msg_id,
-            messages: Vec::new(),
+            messages: HashSet::new(),
             topology: HashMap::new(),
         }
     }
@@ -73,8 +72,8 @@ fn main() -> anyhow::Result<()> {
     let mut stdin = stdin.lines();
     let mut output = std::io::stdout().lock();
 
-    let node_id = send_init_message(&mut stdin, &mut output)?;
-    let mut node = BroadcastNode::new(node_id, 1);
+    let init = send_init_message(&mut stdin, &mut output)?;
+    let mut node = BroadcastNode::new(init, 1);
 
     main_loop(&mut node, &mut stdin, &mut output)
 }

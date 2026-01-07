@@ -25,12 +25,15 @@ pub struct Body<T> {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Init {
+    pub node_id: String,
+    pub node_ids: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum InitPayload {
-    Init {
-        node_id: String,
-        node_ids: Vec<String>,
-    },
+    Init(Init),
     InitOk,
 }
 
@@ -66,7 +69,7 @@ pub trait Node<P> {
 pub fn send_init_message(
     stdin: &mut Lines<StdinLock>,
     output: &mut StdoutLock,
-) -> anyhow::Result<String> {
+) -> anyhow::Result<Init> {
     let init_message = stdin
         .next()
         .context("no message received")?
@@ -75,7 +78,7 @@ pub fn send_init_message(
     let init_message: Message<InitPayload> =
         serde_json::from_str(&init_message).context("could not deserialize message")?;
 
-    let InitPayload::Init { node_id, .. } = init_message.body.kind else {
+    let InitPayload::Init(init) = init_message.body.kind else {
         panic!("first message should be init");
     };
 
@@ -90,7 +93,7 @@ pub fn send_init_message(
     };
 
     response.send_message(output)?;
-    Ok(node_id)
+    Ok(init)
 }
 
 pub fn main_loop<N, P>(
