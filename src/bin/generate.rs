@@ -6,38 +6,42 @@ use std::io::{BufRead, StdoutLock};
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Payload {
-    Echo { echo: String },
-    EchoOk { echo: String },
+    Generate,
+    GenerateOk {
+        #[serde(rename = "id")]
+        guid: String,
+    },
 }
 
-struct EchoNode {
+struct GenerateNode {
     src: String,
     id: usize,
 }
 
-impl Node<Payload> for EchoNode {
+impl Node<Payload> for GenerateNode {
     fn step(&mut self, input: Message<Payload>, output: &mut StdoutLock) -> anyhow::Result<()> {
         match input.body.kind {
-            Payload::Echo { echo } => {
+            Payload::Generate => {
+                let guid = format!("{}-{}", self.src, self.id);
                 let response = Message {
                     src: self.src.clone(),
                     dest: input.src,
                     body: Body {
                         id: Some(self.id),
                         in_reply_to: input.body.id,
-                        kind: Payload::EchoOk { echo },
+                        kind: Payload::GenerateOk { guid },
                     },
                 };
                 response.send_message(output)?;
                 self.id += 1;
             }
-            Payload::EchoOk { .. } => {}
+            Payload::GenerateOk { .. } => {}
         }
         Ok(())
     }
 }
 
-impl EchoNode {
+impl GenerateNode {
     fn new(src: String, id: usize) -> Self {
         Self { src, id }
     }
@@ -49,7 +53,7 @@ fn main() -> anyhow::Result<()> {
     let mut output = std::io::stdout().lock();
 
     let node_id = send_init_message(&mut stdin, &mut output)?;
-    let mut node = EchoNode::new(node_id, 1);
+    let mut node = GenerateNode::new(node_id, 1);
 
     main_loop(&mut node, &mut stdin, &mut output)
 }

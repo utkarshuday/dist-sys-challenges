@@ -2,7 +2,7 @@ use anyhow::{Context, Ok};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
     fmt::Debug,
-    io::{BufRead, StdoutLock, Write},
+    io::{Lines, StdinLock, StdoutLock, Write},
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -44,21 +44,14 @@ impl<P: Serialize> Message<P> {
     }
 }
 
-pub trait Node<P: Serialize> {
-    fn new(src: String, id: usize) -> Self;
+pub trait Node<P> {
     fn step(&mut self, input: Message<P>, output: &mut StdoutLock) -> anyhow::Result<()>;
 }
 
-pub fn run<N, P>() -> anyhow::Result<()>
-where
-    N: Node<P>,
-    P: Serialize + DeserializeOwned + Clone + Debug,
-{
-    let stdin = std::io::stdin().lock();
-    let mut stdin = stdin.lines();
-
-    let mut output = std::io::stdout().lock();
-
+pub fn send_init_message(
+    stdin: &mut Lines<StdinLock>,
+    output: &mut StdoutLock,
+) -> anyhow::Result<String> {
     let init_message = stdin
         .next()
         .context("no message received")?
@@ -71,8 +64,6 @@ where
         panic!("first message should be init");
     };
 
-    let mut state: N = Node::new(node_id, 0);
-
     let response = Message {
         src: init_message.dest,
         dest: init_message.src,
@@ -83,16 +74,25 @@ where
         },
     };
 
-    response.send_message(&mut output)?;
+    response.send_message(output)?;
+    Ok(node_id)
+}
 
+pub fn main_loop<N, P>(
+    node: &mut N,
+    stdin: &mut Lines<StdinLock>,
+    output: &mut StdoutLock,
+) -> anyhow::Result<()>
+where
+    N: Node<P>,
+    P: DeserializeOwned,
+{
     for input in stdin {
         let input = input.context("Maelstrom input from STDIN could not be read")?;
         let input = serde_json::from_str(&input)
             .context("Maelstrom input from STDIN could not be deserialized")?;
-        state
-            .step(input, &mut output)
+        node.step(input, output)
             .context("Node step function failed")?;
     }
-
     Ok(())
 }
